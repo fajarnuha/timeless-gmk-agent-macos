@@ -6,7 +6,7 @@ Each animation plays for **2.5 seconds**, then the screen returns to its clock. 
 
 ![Pi, Claude, Codex, and Agy working and finished cards](animations/preview.png)
 
-Pi has a mint orbit, Claude has an orange sun, Codex has a blue terminal cursor, and Agy has a purple floating chevron. The eight GIFs in [animations](animations/) preview the working and finished loops.
+Pi has a mint orbit, Claude has an orange sun, Codex has a blue terminal cursor, and Agy has an indigo-blue floating chevron. Bold Bungee lettering gives the agent names and status labels a sign-painted look. The eight GIFs in [animations](animations/) preview the working and finished loops.
 
 ## Supported keyboards
 
@@ -167,5 +167,7 @@ node tests/test_pi.mjs
 The Pi smoke test needs Node.js with native TypeScript support. Python tests cover RGB565 encoding, frame ranges, USB packet construction, config preservation, overlapping events, stale turns, disconnect recovery, hook installation, and the fixed playback timer. They do not require a keyboard.
 
 ## Credits
+
+The animations bundle [Bungee](https://github.com/google/fonts/tree/main/ofl/bungee) by The Bungee Project Authors under the [SIL Open Font License](assets/fonts/OFL.txt). Rendering needs no font downloads or installed system fonts.
 
 The protocol was reverse-engineered by Jochen Eisinger ([zuoya_gmk87.py](https://gist.github.com/jeisinger/b198a72c5d7d203541c6269508c9ad8c)) and ported to Go in [rusq/kbdctl](https://github.com/rusq/kbdctl). This project adapts it to macOS. It is BSD-3-Clause licensed; see [LICENSE](LICENSE).

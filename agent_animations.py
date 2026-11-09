@@ -1,4 +1,5 @@
-"""Deterministic 240x135 screen animations. No downloaded assets or system fonts."""
+"""Deterministic 240x135 screen animations using bundled fonts and drawn icons."""
+from functools import lru_cache
 import math
 from pathlib import Path
 
@@ -7,9 +8,17 @@ from PIL import Image, ImageDraw, ImageFont
 SIZE = (240, 135)
 FRAME_MS = 160
 AGENTS = {"pi": (81, 229, 177), "claude": (232, 155, 111), "codex": (112, 195, 255),
-          "agy": (190, 157, 255)}
+          "agy": (112, 125, 255)}
 FRAME_COUNTS = {"start": 6, "finish": 3}
 BACKGROUND = (12, 16, 22)
+DISPLAY_FONT = Path(__file__).resolve().parent / "assets" / "fonts" / "Bungee-Regular.ttf"
+
+
+@lru_cache(maxsize=16)
+def font(size, display=False):
+    """Cache fonts at the renderer's 2x resolution, independent of system fonts."""
+    return (ImageFont.truetype(str(DISPLAY_FONT), size=size * 2) if display
+            else ImageFont.load_default(size=size * 2))
 
 
 def frame(agent, event, index):
@@ -23,8 +32,9 @@ def frame(agent, event, index):
         draw.line([(round(x * 2), round(y * 2)) for x, y in points], fill=fill,
                   width=width * 2, joint="curve")
 
-    def text(x, y, value, size, color):
-        draw.text((x * 2, y * 2), value, font=ImageFont.load_default(size=size * 2), fill=color)
+    def text(x, y, value, size, color, display=False):
+        options = {"anchor": "lt"} if display else {}
+        draw.text((x * 2, y * 2), value, font=font(size, display), fill=color, **options)
 
     draw.rounded_rectangle((12, 12, 467, 257), radius=18, outline=(40, 48, 58), width=2)
     text(16, 14, "TIMELESS / AGENTS", 9, (127, 142, 158))
@@ -59,12 +69,15 @@ def frame(agent, event, index):
         # An ascending chevron floats above a moving launch ring.
         lift = 3 * math.sin(phase * math.tau)
         line([(32, 83 + lift), (52, 48 + lift), (72, 83 + lift)], width=4)
-        line([(41, 72 + lift), (63, 72 + lift)], fill=(237, 224, 255), width=2)
+        line([(41, 72 + lift), (63, 72 + lift)], fill=(218, 225, 255), width=2)
         draw.arc((55, 170, 153, 200), phase * 360, phase * 360 + 270,
                  fill=accent, width=4)
 
-    text(101, 38, agent.upper(), 22, (239, 244, 248))
-    text(102, 67, "WORKING" if event == "start" else "DONE", 12, accent)
+    # Chunky sign lettering with an offset ink shadow, sized for the longest name.
+    shadow = tuple(channel // 3 for channel in accent)
+    text(102, 43, agent.upper(), 28, shadow, display=True)
+    text(101, 41, agent.upper(), 28, (239, 244, 248), display=True)
+    text(102, 70, "WORKING" if event == "start" else "DONE", 12, accent, display=True)
     if event == "start":
         for dot in range(4):
             color = accent if dot == index % 4 else (45, 55, 65)
@@ -81,7 +94,8 @@ def frame(agent, event, index):
         # A subtle travelling highlight keeps the completion card alive.
         draw.rounded_rectangle((32, 224, 447, 231), radius=3, fill=accent)
         x = 32 + round(phase * 330)
-        draw.rounded_rectangle((x, 224, x + 70, 231), radius=3, fill=(225, 245, 238))
+        highlight = tuple((channel + 3 * 255) // 4 for channel in accent)
+        draw.rounded_rectangle((x, 224, x + 70, 231), radius=3, fill=highlight)
     return image.resize(SIZE, Image.Resampling.LANCZOS)
 
 
