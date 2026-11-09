@@ -68,8 +68,8 @@ class EventTests(unittest.TestCase):
         show.assert_called_once_with("pi", "start")
         self.assertNotIn("error", agent_hook.read_state())
 
-    def test_worker_waits_fixed_duration_before_restoring_clock(self):
-        agent_hook.record_event("claude", "start", "one", duration=2.5)
+    def test_worker_waits_default_duration_before_restoring_clock(self):
+        agent_hook.record_event("claude", "start", "one")
         timeline = []
         now = [100.0]
         def sleep(seconds):
@@ -79,7 +79,7 @@ class EventTests(unittest.TestCase):
              patch("kbd_screen.show_agent", side_effect=lambda *args: timeline.append(("animation", now[0]))), \
              patch("kbd_screen.show_clock", side_effect=lambda: timeline.append(("clock", now[0]))):
             agent_hook.worker()
-        self.assertEqual(timeline, [("animation", 100.0), ("clock", 102.5)])
+        self.assertEqual(timeline, [("animation", 100.0), ("clock", 103.0)])
 
     def test_rapid_start_and_finish_both_play_for_full_duration(self):
         agent_hook.record_event("pi", "start", "one", duration=2.5)

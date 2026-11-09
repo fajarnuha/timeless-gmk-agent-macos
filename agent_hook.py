@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 STATE_DIR = Path(os.environ.get("TIMELESS82_STATE_DIR", ROOT / ".runtime"))
 AGENTS = ("pi", "claude", "codex", "agy")
 SESSION_TTL = 6 * 60 * 60
-DEFAULT_DURATION = 2.5
+DEFAULT_DURATION = 3.0
 
 
 @contextmanager
