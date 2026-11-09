@@ -1,4 +1,6 @@
 from unittest.mock import Mock, patch
+from pathlib import Path
+import tempfile
 import unittest
 
 from PIL import Image
@@ -6,6 +8,7 @@ from PIL import Image
 from agent_animations import AGENTS, FRAME_COUNTS, SIZE, frames
 from kbd_screen import FRAME_BYTES, animation_data, encode_frame, upload
 from kbd_time_sync import Kbd
+import kbd_screen
 
 
 class ScreenTests(unittest.TestCase):
@@ -17,7 +20,7 @@ class ScreenTests(unittest.TestCase):
         self.assertEqual(set(data[240 * 135 * 2:]), {0})
 
     def test_all_animations_have_distinct_frames_and_fit_memory(self):
-        self.assertLessEqual(sum(FRAME_COUNTS.values()), 36)
+        self.assertLessEqual(sum(FRAME_COUNTS.values()) * len(AGENTS), 36)
         for agent in AGENTS:
             for event, count in FRAME_COUNTS.items():
                 images = frames(agent, event)
@@ -33,6 +36,23 @@ class ScreenTests(unittest.TestCase):
             expected = b"".join(encode_frame(image) for image in frames(agent, event))
             self.assertEqual(data[offset * FRAME_BYTES:(offset + count) * FRAME_BYTES], expected)
             self.assertLessEqual(first + second, 36)
+
+    def test_agy_selection_loads_the_repacked_bank_once(self):
+        keyboard = Mock()
+        keyboard.path = b"test-keyboard"
+        keyboard.load_config.return_value = [0] * 48
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(kbd_screen, "STATE_DIR", Path(directory)), \
+             patch.object(kbd_screen, "Kbd") as device, patch.object(kbd_screen, "upload") as upload_bank:
+            device.return_value.__enter__.return_value = keyboard
+            kbd_screen.show_agent("agy", "finish")
+            self.assertEqual(upload_bank.call_args.args[2], (6, 30))
+            self.assertEqual(keyboard.write_config.call_args.args[0][33:35], [2, 33])
+            self.assertEqual(keyboard.write_config.call_args.args[0][46], 3)
+            kbd_screen.show_agent("agy", "start")
+            upload_bank.assert_called_once()
+            self.assertEqual(keyboard.write_config.call_args.args[0][33:35], [2, 27])
+            self.assertEqual(keyboard.write_config.call_args.args[0][46], 6)
 
     def test_upload_preserves_unrelated_settings_and_positions(self):
         keyboard = Mock()

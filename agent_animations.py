@@ -6,8 +6,9 @@ from PIL import Image, ImageDraw, ImageFont
 
 SIZE = (240, 135)
 FRAME_MS = 160
-AGENTS = {"pi": (81, 229, 177), "claude": (232, 155, 111), "codex": (112, 195, 255)}
-FRAME_COUNTS = {"start": 8, "finish": 4}
+AGENTS = {"pi": (81, 229, 177), "claude": (232, 155, 111), "codex": (112, 195, 255),
+          "agy": (190, 157, 255)}
+FRAME_COUNTS = {"start": 6, "finish": 3}
 BACKGROUND = (12, 16, 22)
 
 
@@ -47,13 +48,20 @@ def frame(agent, event, index):
             line([(cx + 13 * math.cos(angle), cy + 13 * math.sin(angle)),
                   (cx + radius * math.cos(angle), cy + radius * math.sin(angle))], width=3)
         draw.ellipse((94, 128, 114, 148), fill=accent)
-    else:
+    elif agent == "codex":
         # A terminal cursor travels between coding brackets.
         line([(39, 52), (25, 69), (39, 86)], width=4)
         line([(65, 52), (79, 69), (65, 86)], width=4)
         line([(57, 48), (47, 90)], fill=(226, 238, 246), width=3)
         y = 47 + int(phase * 43)
         line([(27, y), (77, y)], fill=(51, 90, 118), width=1)
+    else:
+        # An ascending chevron floats above a moving launch ring.
+        lift = 3 * math.sin(phase * math.tau)
+        line([(32, 83 + lift), (52, 48 + lift), (72, 83 + lift)], width=4)
+        line([(41, 72 + lift), (63, 72 + lift)], fill=(237, 224, 255), width=2)
+        draw.arc((55, 170, 153, 200), phase * 360, phase * 360 + 270,
+                 fill=accent, width=4)
 
     text(101, 38, agent.upper(), 22, (239, 244, 248))
     text(102, 67, "WORKING" if event == "start" else "DONE", 12, accent)
@@ -67,7 +75,7 @@ def frame(agent, event, index):
 
     draw.rounded_rectangle((32, 224, 447, 231), radius=3, fill=(37, 46, 56))
     if event == "start":
-        x = 32 + round(index / 7 * 345)
+        x = 32 + round(index / (FRAME_COUNTS[event] - 1) * 345)
         draw.rounded_rectangle((x, 224, x + 70, 231), radius=3, fill=accent)
     else:
         # A subtle travelling highlight keeps the completion card alive.

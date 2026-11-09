@@ -13,7 +13,7 @@ import time
 # Keep hook ingestion independent of hidapi and Pillow, including on disconnected Macs.
 ROOT = Path(__file__).resolve().parent
 STATE_DIR = Path(os.environ.get("TIMELESS82_STATE_DIR", ROOT / ".runtime"))
-AGENTS = ("pi", "claude", "codex")
+AGENTS = ("pi", "claude", "codex", "agy")
 SESSION_TTL = 6 * 60 * 60
 DEFAULT_DURATION = 2.5
 
@@ -61,6 +61,9 @@ def record_event(agent, event, session, turn=None, duration=DEFAULT_DURATION):
                     if now - value["started"] < SESSION_TTL}
         previous = sessions.get(key)
         if event == "start":
+            # Agy invokes PreInvocation before every model call in a turn.
+            if agent == "agy" and previous:
+                return False
             sessions[key] = {"agent": agent, "started": now, "turn": turn}
         elif previous and (not turn or not previous.get("turn") or previous["turn"] == turn):
             del sessions[key]
@@ -74,6 +77,19 @@ def record_event(agent, event, session, turn=None, duration=DEFAULT_DURATION):
         state["pending"].append({"revision": state["revision"], "desired": desired})
         write_state(state)
     return True
+
+
+def agy_event(event, payload):
+    """Translate Antigravity's camelCase Stop payload into a notification."""
+    if event != "finish":
+        return event
+    reason = payload.get("terminationReason", "").upper()
+    if (payload.get("error") or reason.startswith("MAX_") or reason in {
+            "ERROR", "USER_CANCELED", "USER_CANCELLED", "CANCELED", "CANCELLED",
+            "TERMINAL_CUSTOM_HOOK"}):
+        return "cancel"
+    # Stop can fire while background work is still running.
+    return "finish" if payload.get("fullyIdle") is True else None
 
 
 def spawn_worker():
@@ -134,7 +150,7 @@ def main():
     event_parser = sub.add_parser("event", help="receive a hook, queue a background update")
     event_parser.add_argument("agent", choices=AGENTS)
     event_parser.add_argument("event", choices=("start", "finish", "cancel"))
-    event_parser.add_argument("--session", help="otherwise read session_id from JSON on stdin")
+    event_parser.add_argument("--session", help="otherwise read session_id or Agy conversationId from JSON on stdin")
     event_parser.add_argument("--turn")
     event_parser.add_argument("--duration", type=duration_seconds, default=DEFAULT_DURATION)
     display = sub.add_parser("display", help="show an animation now, with errors on stderr")
@@ -151,10 +167,11 @@ def main():
         # Keyboard failures remain in hook.log, never in the agent's context.
         try:
             payload = {} if args.session else json.load(sys.stdin)
-            session = args.session or payload.get("session_id")
+            session = args.session or payload.get("conversationId" if args.agent == "agy" else "session_id")
             if not session:
-                raise ValueError("hook payload is missing session_id")
-            if record_event(args.agent, args.event, session, args.turn or payload.get("turn_id"), args.duration):
+                raise ValueError("hook payload is missing a session identity")
+            event = agy_event(args.event, payload) if args.agent == "agy" and not args.session else args.event
+            if event and record_event(args.agent, event, session, args.turn or payload.get("turn_id"), args.duration):
                 spawn_worker()
         except Exception as error:
             print(f"Timeless82 hook: {error}", file=sys.stderr)

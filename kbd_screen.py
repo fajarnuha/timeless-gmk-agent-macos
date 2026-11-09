@@ -10,6 +10,7 @@ from agent_animations import AGENTS, FRAME_MS, SIZE, frames
 from kbd_time_sync import Kbd, STATE_DIR, set_clock
 
 FRAME_BYTES = 65536
+MAX_FRAMES = 36
 DISPLAY_OFFSET = 33
 FRAME_OFFSETS = (34, 46)
 DELAY_OFFSET = 43
@@ -27,7 +28,7 @@ def encode_frame(image):
 
 
 def animation_data():
-    """Pack all six animations once. Slot 2 starts after slot 1's frame count.
+    """Pack every animation once. Slot 2 starts after slot 1's frame count.
 
     Selecting an animation changes that boundary and slot 2's frame count,
     exposing only the desired consecutive frames without another flash upload.
@@ -38,16 +39,19 @@ def animation_data():
         for event in ("start", "finish"):
             images = frames(agent, event)
             # The first animation uses slot 1; later animations use slot 2.
-            windows[agent, event] = (1, len(images), 36 - len(images)) if offset == 0 else (2, offset, len(images))
+            windows[agent, event] = (1, len(images), 0) if offset == 0 else (2, offset, len(images))
             chunks.extend(encode_frame(image) for image in images)
             offset += len(images)
-    if offset != 36:
-        raise ValueError("animation bank must contain exactly 36 frames")
+    if offset > MAX_FRAMES:
+        raise ValueError(f"animation bank exceeds {MAX_FRAMES} frames")
+    first_key = next(iter(windows))
+    display, first, _ = windows[first_key]
+    windows[first_key] = (display, first, offset - first)
     return b"".join(chunks), windows
 
 
 def upload(keyboard, data, counts, cfg, progress=None):
-    if min(counts) < 1 or sum(counts) > 36 or len(data) != sum(counts) * FRAME_BYTES:
+    if min(counts) < 1 or sum(counts) > MAX_FRAMES or len(data) != sum(counts) * FRAME_BYTES:
         raise ValueError("invalid animation data or frame counts, maximum 36 total")
     cfg = list(cfg)
     if len(cfg) != 48:
@@ -83,7 +87,8 @@ def show_agent(agent, event, force=False, progress=None):
                 or cache.get("counts") != [cfg[offset] for offset in FRAME_OFFSETS]):
             # Invalidate first. An interrupted upload must always be retried in full.
             cache_file.unlink(missing_ok=True)
-            upload(keyboard, data, (8, 28), cfg, progress)
+            _, first, second = next(iter(windows.values()))
+            upload(keyboard, data, (first, second), cfg, progress)
             cfg = keyboard.load_config()
         display, first, second = windows[agent, event]
         cfg[DISPLAY_OFFSET], cfg[34], cfg[46] = display, first, second

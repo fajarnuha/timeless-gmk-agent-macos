@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install Timeless82 hooks for Pi, Claude Code, and Codex. Preserve existing settings."""
+"""Install Timeless82 hooks for Pi, Claude Code, Codex, and Agy. Preserve existing settings."""
 import argparse
 import json
 import os
@@ -10,10 +10,11 @@ import stat
 import sys
 import time
 
-from agent_hook import DEFAULT_DURATION, duration_seconds
+from agent_hook import AGENTS, DEFAULT_DURATION, duration_seconds
 
 ROOT = Path(__file__).resolve().parent
 HOOK = ROOT / "agent_hook.py"
+AGY_HOOK_NAME = "timeless82-keyboard"
 
 
 def owned(handler):
@@ -26,6 +27,25 @@ def owned(handler):
 
 
 def merge_hooks(config, agent, python, uninstall=False, duration=DEFAULT_DURATION):
+    if agent == "agy":
+        entry = config.get(AGY_HOOK_NAME, {})
+        if not isinstance(entry, dict):
+            raise ValueError(f"{AGY_HOOK_NAME} must be a hook object")
+        for event, state in (("PreInvocation", "start"), ("Stop", "finish")):
+            handlers = [handler for handler in entry.get(event, []) if not owned(handler)]
+            if not uninstall:
+                handlers.append({"type": "command", "command": shlex.join([
+                    str(python), str(HOOK), "event", agent, state, "--duration", str(duration)]),
+                    "timeout": 5})
+            if handlers:
+                entry[event] = handlers
+            else:
+                entry.pop(event, None)
+        if any(key != "enabled" for key in entry):
+            config[AGY_HOOK_NAME] = entry
+        else:
+            config.pop(AGY_HOOK_NAME, None)
+        return config
     hooks = config.setdefault("hooks", {})
     if not isinstance(hooks, dict):
         raise ValueError("existing hooks must be an object")
@@ -74,13 +94,13 @@ def save(path, content, dry_run=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--agents", nargs="+", choices=("pi", "claude", "codex"),
-                        default=["pi", "claude", "codex"])
+    parser.add_argument("--agents", nargs="+", choices=AGENTS, default=list(AGENTS))
     parser.add_argument("--home", type=Path, help="alternate home, useful for a sandbox preview")
     parser.add_argument("--python", type=Path, default=ROOT / ".venv/bin/python")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--uninstall", action="store_true")
     parser.add_argument("--duration", type=duration_seconds, default=DEFAULT_DURATION)
+    parser.add_argument("--agy-config-dir", type=Path, help="Agy customization root, defaults to ~/.gemini/config")
     args = parser.parse_args()
     python = args.python.absolute()
     if not args.uninstall and not python.is_file():
@@ -93,6 +113,7 @@ def main():
                    Path(os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude"))) / "settings.json",
         "codex": (home / ".codex" if args.home else
                   Path(os.environ.get("CODEX_HOME", home / ".codex"))) / "hooks.json",
+        "agy": (args.agy_config_dir or home / ".gemini/config") / "hooks.json",
     }
     # Validate and prepare every edit before changing any configuration.
     edits = []
@@ -123,7 +144,7 @@ def main():
         else:
             save(path, content, args.dry_run)
     if not args.uninstall:
-        print("Restart Pi and Claude Code. In Codex, open /hooks and trust the Timeless82 hooks.")
+        print("Restart installed agents. In Agy, check /hooks. In Codex, open /hooks and trust the Timeless82 hooks.")
 
 
 if __name__ == "__main__":
